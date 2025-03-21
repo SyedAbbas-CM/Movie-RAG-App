@@ -1,7 +1,5 @@
 # Movie Research RAG Agent
 
-![Movie RAG Project Logo](https://placeholder.com/wp-content/uploads/2018/10/placeholder.png)
-
 ## Overview
 
 I created a Movie Research Assistant application that helps users find information about movies and TV shows. The system uses Retrieval Augmented Generation (RAG) to provide accurate and up-to-date information by combining AI language models with real-time data from movie databases and YouTube.
