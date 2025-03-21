@@ -1,0 +1,38 @@
+flowchart TD
+    User[User] --> GUI[GUI Interface]
+    GUI --> RAG[RAG Agent]
+    
+    subgraph "Core Components"
+        RAG --> |Query Analysis| Tools[Search Tools]
+        RAG --> |Semantic Search| VectorDB[Vector Database]
+        RAG --> |Response Generation| LLM[Language Model]
+        
+        Tools --> |Movie Info| OMDb[OMDb API]
+        Tools --> |Trailers| YouTube[YouTube API]
+        Tools --> |Detailed Info| TMDB[TMDB API]
+        
+        VectorDB --> |Store Movie Data| ChromaDB[Chroma DB]
+        VectorDB --> |Embeddings| SentenceTransformers[Sentence Transformers]
+    end
+    
+    OMDb --> |Results| RAG
+    YouTube --> |Results| RAG
+    TMDB --> |Results| RAG
+    ChromaDB --> |Similar Movies| RAG
+    
+    RAG --> |Response| GUI
+    GUI --> |Display| Results[Rich Results Display]
+    
+    Results --> MovieInfo[Movie Information Card]
+    Results --> TrailerView[Trailer Player]
+    Results --> SimilarMovies[Recommendations]
+    
+    class User,GUI,RAG,Results primary
+    class Tools,VectorDB,LLM secondary
+    class OMDb,YouTube,TMDB,ChromaDB,SentenceTransformers tertiary
+    class MovieInfo,TrailerView,SimilarMovies quaternary
+    
+    classDef primary fill:#4285F4,stroke:#333,stroke-width:2px,color:white
+    classDef secondary fill:#34A853,stroke:#333,stroke-width:2px,color:white
+    classDef tertiary fill:#FBBC05,stroke:#333,stroke-width:2px,color:black
+    classDef quaternary fill:#EA4335,stroke:#333,stroke-width:2px,color:white
