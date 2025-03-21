@@ -306,6 +306,43 @@ Be conversational and helpful. If you're not sure what movie the user is referri
             print(f"Error saving conversation: {e}")
             return False
     
-    def load_conversation(self, filepath: str) -> bool:
-        """
-        Load conversation history from a file.
+def load_conversation(self, filepath: str) -> bool:
+    """
+    Load conversation history from a file.
+    
+    Parameters:
+    - filepath (str): Path to load the conversation history from
+    
+    Returns:
+    - bool: True if successful, False otherwise
+    """
+    try:
+        with open(filepath, 'r') as f:
+            history = json.load(f)
+        
+        # Clear current history
+        self.clear_conversation()
+        
+        # Reconstruct history
+        for msg in history:
+            if msg["role"] == "user":
+                self.conversation_history.append(Message(content=msg["content"], role="user"))
+            elif msg["role"] == "assistant":
+                self.conversation_history.append(
+                    Message(
+                        content=msg["content"],
+                        role="assistant",
+                        tool_calls=msg.get("tool_calls")
+                    )
+                )
+                
+        # Update memory
+        for i in range(0, len(self.conversation_history), 2):
+            if i + 1 < len(self.conversation_history):
+                self.memory.chat_memory.add_user_message(self.conversation_history[i].content)
+                self.memory.chat_memory.add_ai_message(self.conversation_history[i+1].content)
+        
+        return True
+    except Exception as e:
+        print(f"Error loading conversation: {e}")
+        return False
