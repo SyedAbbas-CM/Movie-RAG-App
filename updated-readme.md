@@ -27,7 +27,101 @@ I designed this system with a modular architecture that separates concerns and a
 - **Vector Store**: A local database that enables semantic search and recommendations
 - **GUI**: A user-friendly interface for interacting with the system
 
-### 2. Data Flow
+### 2. Architecture Diagram
+
+```mermaid
+flowchart TD
+    User[User] --> GUI[GUI Interface]
+    GUI --> RAG[RAG Agent]
+    
+    subgraph "Core Components"
+        RAG --> |Query Analysis| Tools[Search Tools]
+        RAG --> |Semantic Search| VectorDB[Vector Database]
+        RAG --> |Response Generation| LLM[Language Model]
+        
+        Tools --> |Movie Info| OMDb[OMDb API]
+        Tools --> |Trailers| YouTube[YouTube API]
+        Tools --> |Detailed Info| TMDB[TMDB API]
+        
+        VectorDB --> |Store Movie Data| ChromaDB[Chroma DB]
+        VectorDB --> |Embeddings| SentenceTransformers[Sentence Transformers]
+    end
+    
+    OMDb --> |Results| RAG
+    YouTube --> |Results| RAG
+    TMDB --> |Results| RAG
+    ChromaDB --> |Similar Movies| RAG
+    
+    RAG --> |Response| GUI
+    GUI --> |Display| Results[Rich Results Display]
+    
+    Results --> MovieInfo[Movie Information Card]
+    Results --> TrailerView[Trailer Player]
+    Results --> SimilarMovies[Recommendations]
+    
+    class User,GUI,RAG,Results primary
+    class Tools,VectorDB,LLM secondary
+    class OMDb,YouTube,TMDB,ChromaDB,SentenceTransformers tertiary
+    class MovieInfo,TrailerView,SimilarMovies quaternary
+    
+    classDef primary fill:#4285F4,stroke:#333,stroke-width:2px,color:white
+    classDef secondary fill:#34A853,stroke:#333,stroke-width:2px,color:white
+    classDef tertiary fill:#FBBC05,stroke:#333,stroke-width:2px,color:black
+    classDef quaternary fill:#EA4335,stroke:#333,stroke-width:2px,color:white
+```
+
+### 3. Data Flow Diagram
+
+```mermaid
+sequenceDiagram
+    participant User
+    participant GUI as GUI Interface
+    participant RAG as RAG Agent
+    participant LLM as Language Model
+    participant OMDb as OMDb API
+    participant YouTube as YouTube API
+    participant VectorDB as Vector Database
+    
+    User->>GUI: Enter movie query
+    Note over User,GUI: e.g., "Tell me about Inception"
+    
+    GUI->>RAG: Process query
+    
+    RAG->>LLM: Analyze query intent
+    LLM-->>RAG: Determine tools to use
+    
+    RAG->>OMDb: Search movie info
+    OMDb-->>RAG: Return movie data
+    
+    RAG->>YouTube: Search for trailer
+    YouTube-->>RAG: Return trailer links
+    
+    RAG->>VectorDB: Store movie information
+    Note over RAG,VectorDB: Enables future recommendations
+    
+    RAG->>LLM: Generate response with retrieved data
+    LLM-->>RAG: Return natural language response
+    
+    RAG-->>GUI: Return complete results
+    
+    GUI->>User: Display movie card, trailer, and response
+    
+    Note over User,GUI: For semantic search queries like<br>"Find sci-fi movies about dreams"
+    
+    User->>GUI: Enter semantic search query
+    GUI->>RAG: Process semantic query
+    
+    RAG->>VectorDB: Perform semantic search
+    VectorDB-->>RAG: Return matching movies
+    
+    RAG->>LLM: Generate response with similar movies
+    LLM-->>RAG: Return natural language response
+    
+    RAG-->>GUI: Return semantic search results
+    GUI->>User: Display matching movies and response
+```
+
+## Data Flow
 
 When a user asks a question:
 1. The query goes to the RAG agent
@@ -139,26 +233,4 @@ movie_rag_agent/
 
 ## Future Improvements
 
-1. **Expanded Movie Database**: Integrate with more movie databases for even more comprehensive information
-2. **User Preferences**: Add user profiles to remember favorite genres and viewing history
-3. **Voice Interface**: Add speech recognition for hands-free interaction
-4. **Mobile Version**: Create a mobile app version using a cross-platform framework
-5. **Advanced Recommendations**: Implement collaborative filtering alongside content-based recommendations
-
-## Conclusion
-
-This project demonstrates how RAG can be used to create an intelligent, context-aware application that combines the strengths of large language models with structured data retrieval. The architecture allows for easy extension and customization, making it a solid foundation for more advanced movie recommendation and search systems.
-
-## License
-
-MIT License
-
-## Acknowledgments
-
-- Thanks to the creators of LangChain for their excellent framework
-- OMDb, YouTube, and TMDB for providing APIs to access movie data
-- The PyQt team for their comprehensive GUI toolkit
-
----
-
-I hope you find this Movie Research RAG Agent useful! If you have any questions or suggestions, please feel free to open an issue or reach out directly.
+1. **Expanded Movie Database**: Integrate with more movie databases for even more comprehensive informa

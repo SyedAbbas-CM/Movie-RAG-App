@@ -23,19 +23,30 @@ def setup_logging():
     
     # Set up logging with timestamp in filename
     timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-    logging.basicConfig(
-        level=logging.INFO,
-        format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
-        handlers=[
-            logging.FileHandler(f"logs/movie_rag_{timestamp}.log"),
-            logging.StreamHandler()
-        ]
+    
+    # Use utf-8 encoding for file handler to fix encoding issues
+    file_handler = logging.FileHandler(
+        f"logs/movie_rag_{timestamp}.log", 
+        encoding='utf-8'
     )
+    
+    # Configure stream handler to use utf-8 encoding for console output
+    stream_handler = logging.StreamHandler()
+    
+    # Configure formatting
+    formatter = logging.Formatter('%(asctime)s - %(name)s - %(levelname)s - %(message)s')
+    file_handler.setFormatter(formatter)
+    stream_handler.setFormatter(formatter)
+    
+    # Configure root logger
+    root_logger = logging.getLogger()
+    root_logger.setLevel(logging.INFO)
+    root_logger.addHandler(file_handler)
+    root_logger.addHandler(stream_handler)
     
     # Log system info
     logging.info(f"Python version: {sys.version}")
     logging.info(f"Platform: {sys.platform}")
-
 def check_api_keys():
     """Check if required API keys are set and return status messages."""
     api_keys = {
@@ -48,12 +59,12 @@ def check_api_keys():
     messages = []
     for key, value in api_keys.items():
         if value:
-            messages.append(f"✓ {key} is set")
+            messages.append(f"[OK] {key} is set")
         else:
             if key in ["OPENAI_API_KEY", "OMDB_API_KEY", "YOUTUBE_API_KEY"]:
-                messages.append(f"✗ {key} is missing (required)")
+                messages.append(f"[MISSING] {key} is missing (required)")
             else:
-                messages.append(f"! {key} is missing (optional)")
+                messages.append(f"[WARNING] {key} is missing (optional)")
     
     return messages
 

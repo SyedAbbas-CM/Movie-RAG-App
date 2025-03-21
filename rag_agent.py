@@ -306,43 +306,266 @@ Be conversational and helpful. If you're not sure what movie the user is referri
             print(f"Error saving conversation: {e}")
             return False
     
-def load_conversation(self, filepath: str) -> bool:
-    """
-    Load conversation history from a file.
-    
-    Parameters:
-    - filepath (str): Path to load the conversation history from
-    
-    Returns:
-    - bool: True if successful, False otherwise
-    """
-    try:
-        with open(filepath, 'r') as f:
-            history = json.load(f)
+    def load_conversation(self, filepath: str) -> bool:
+        """
+        Load conversation history from a file.
         
-        # Clear current history
-        self.clear_conversation()
+        Parameters:
+        - filepath (str): Path to load the conversation history from
         
-        # Reconstruct history
-        for msg in history:
-            if msg["role"] == "user":
-                self.conversation_history.append(Message(content=msg["content"], role="user"))
-            elif msg["role"] == "assistant":
-                self.conversation_history.append(
-                    Message(
-                        content=msg["content"],
-                        role="assistant",
-                        tool_calls=msg.get("tool_calls")
+        Returns:
+        - bool: True if successful, False otherwise
+        """
+        try:
+            with open(filepath, 'r') as f:
+                history = json.load(f)
+            
+            # Clear current history
+            self.clear_conversation()
+            
+            # Reconstruct history
+            for msg in history:
+                if msg["role"] == "user":
+                    self.conversation_history.append(Message(content=msg["content"], role="user"))
+                elif msg["role"] == "assistant":
+                    self.conversation_history.append(
+                        Message(
+                            content=msg["content"],
+                            role="assistant",
+                            tool_calls=msg.get("tool_calls")
+                        )
                     )
-                )
-                
-        # Update memory
-        for i in range(0, len(self.conversation_history), 2):
-            if i + 1 < len(self.conversation_history):
-                self.memory.chat_memory.add_user_message(self.conversation_history[i].content)
-                self.memory.chat_memory.add_ai_message(self.conversation_history[i+1].content)
+                    
+            # Update memory
+            for i in range(0, len(self.conversation_history), 2):
+                if i + 1 < len(self.conversation_history):
+                    self.memory.chat_memory.add_user_message(self.conversation_history[i].content)
+                    self.memory.chat_memory.add_ai_message(self.conversation_history[i+1].content)
+            
+            return True
+        except Exception as e:
+            print(f"Error loading conversation: {e}")
+            return False
+
+
+class SimpleMovieRAGAgent:
+    """
+    A simplified version of the MovieRAGAgent that doesn't use LangChain.
+    This is used as a fallback when the OpenAI API key is not available.
+    """
+    
+    def __init__(self, openai_api_key: str, omdb_api_key: str, youtube_api_key: str, tmdb_api_key: Optional[str] = None):
+        """
+        Initialize the simple RAG agent with API keys.
         
-        return True
-    except Exception as e:
-        print(f"Error loading conversation: {e}")
-        return False
+        Parameters:
+        - openai_api_key (str): OpenAI API key (not used in this simple version)
+        - omdb_api_key (str): OMDb API key
+        - youtube_api_key (str): YouTube Data API key
+        - tmdb_api_key (str, optional): TMDB API key
+        """
+        # Initialize conversation history
+        self.conversation_history = []
+        
+        # Initialize search tools
+        self.omdb_tool = OMDbMovieSearchTool(omdb_api_key)
+        self.youtube_tool = YouTubeSearchTool(youtube_api_key)
+        self.tmdb_tool = TMDBMovieSearchTool(tmdb_api_key) if tmdb_api_key else None
+        
+        # Initialize vector store
+        self.vector_store = MovieVectorStore()
+    
+    def process_query(self, user_query: str) -> Dict[str, Any]:
+        """
+        Process a user query to retrieve movie information without using LLM.
+        This is a simplified version that directly searches for movie info.
+        
+        Parameters:
+        - user_query (str): The user's query about a movie
+        
+        Returns:
+        - dict: Response data including movie info and search results
+        """
+        # Add user message to history
+        self.conversation_history.append(Message(content=user_query, role="user"))
+        
+        # Extract movie title from query (simple approach)
+        movie_title = user_query
+        if "about" in user_query.lower():
+            parts = user_query.lower().split("about")
+            if len(parts) > 1:
+                movie_title = parts[1].strip()
+        
+        # Handle trailer requests
+        trailer_request = "trailer" in user_query.lower()
+        
+        # First, search for movie information
+        tool_calls = []
+        movie_info = {}
+        trailer_info = []
+        
+        # Search movie info
+        movie_result = self.omdb_tool.search(movie_title)
+        tool_calls.append({
+            "tool": "OMDbMovieSearch",
+            "input": movie_title,
+            "output": movie_result
+        })
+        
+        if "structured_info" in movie_result:
+            movie_info = movie_result["structured_info"]
+            # Add to vector store
+            if movie_info and movie_info.get("title"):
+                self.vector_store.add_movie(movie_info)
+        
+        # If TMDB is available, also search there
+        if self.tmdb_tool:
+            tmdb_result = self.tmdb_tool.search(movie_title)
+            tool_calls.append({
+                "tool": "TMDBMovieSearch",
+                "input": movie_title,
+                "output": tmdb_result
+            })
+            
+            # If TMDB has better results, use those
+            if "structured_info" in tmdb_result and not movie_info:
+                movie_info = tmdb_result["structured_info"]
+                # Add to vector store
+                if movie_info and movie_info.get("title"):
+                    self.vector_store.add_movie(movie_info)
+            
+            # Get trailers from TMDB if available
+            if "trailers" in tmdb_result and tmdb_result["trailers"]:
+                trailer_info = tmdb_result["trailers"]
+        
+        # Search for trailer if requested or not found in TMDB
+        if trailer_request or (trailer_info == [] and movie_info):
+            youtube_query = f"{movie_info.get('title', movie_title)} movie trailer"
+            youtube_result = self.youtube_tool.search(youtube_query)
+            tool_calls.append({
+                "tool": "YouTubeSearch",
+                "input": youtube_query,
+                "output": youtube_result
+            })
+            
+            if isinstance(youtube_result, list) and len(youtube_result) > 0:
+                trailer_info = youtube_result
+        
+        # Generate a simple response
+        if movie_info:
+            movie_title = movie_info.get("title", "this movie")
+            response = f"Here's what I found about {movie_title}:\n\n"
+            
+            if movie_info.get("description"):
+                response += f"{movie_info['description']}\n\n"
+            
+            if movie_info.get("director"):
+                response += f"Directed by {movie_info['director']}. "
+            
+            if movie_info.get("cast") and len(movie_info["cast"]) > 0:
+                response += f"Starring {', '.join(movie_info['cast'][:3])}. "
+            
+            if movie_info.get("year"):
+                response += f"Released in {movie_info['year']}. "
+            
+            if movie_info.get("rating"):
+                response += f"Rating: {movie_info['rating']}."
+            
+            if trailer_info:
+                response += f"\n\nI've also found a trailer for you to watch."
+        else:
+            response = f"I couldn't find specific information about '{movie_title}'. Please try with a different movie title or check the spelling."
+        
+        # Add assistant message to history
+        self.conversation_history.append(
+            Message(
+                content=response,
+                role="assistant",
+                tool_calls=tool_calls,
+                tool_results={
+                    "movie_info": movie_info,
+                    "trailer_info": trailer_info
+                }
+            )
+        )
+        
+        return {
+            "response": response,
+            "tool_calls": tool_calls,
+            "movie_info": movie_info,
+            "trailer_info": trailer_info,
+            "conversation_history": self.get_conversation_history()
+        }
+    
+    def get_conversation_history(self) -> List[Dict[str, Any]]:
+        """
+        Return the conversation history in a simplified format.
+        
+        Returns:
+        - list: Conversation history with messages and tool calls
+        """
+        return [
+            {
+                "role": msg.role,
+                "content": msg.content,
+                "tool_calls": msg.tool_calls if hasattr(msg, "tool_calls") and msg.tool_calls else None
+            }
+            for msg in self.conversation_history
+        ]
+    
+    def clear_conversation(self) -> None:
+        """Clear the conversation history."""
+        self.conversation_history = []
+    
+    def save_conversation(self, filepath: str) -> bool:
+        """
+        Save the conversation history to a file.
+        
+        Parameters:
+        - filepath (str): Path to save the conversation history
+        
+        Returns:
+        - bool: True if successful, False otherwise
+        """
+        try:
+            with open(filepath, 'w') as f:
+                json.dump(self.get_conversation_history(), f, indent=2)
+            return True
+        except Exception as e:
+            print(f"Error saving conversation: {e}")
+            return False
+    
+    def load_conversation(self, filepath: str) -> bool:
+        """
+        Load conversation history from a file.
+        
+        Parameters:
+        - filepath (str): Path to load the conversation history from
+        
+        Returns:
+        - bool: True if successful, False otherwise
+        """
+        try:
+            with open(filepath, 'r') as f:
+                history = json.load(f)
+            
+            # Clear current history
+            self.clear_conversation()
+            
+            # Reconstruct history
+            for msg in history:
+                if msg["role"] == "user":
+                    self.conversation_history.append(Message(content=msg["content"], role="user"))
+                elif msg["role"] == "assistant":
+                    self.conversation_history.append(
+                        Message(
+                            content=msg["content"],
+                            role="assistant",
+                            tool_calls=msg.get("tool_calls")
+                        )
+                    )
+            
+            return True
+        except Exception as e:
+            print(f"Error loading conversation: {e}")
+            return False
